@@ -13,15 +13,26 @@ Vue.component('product',{
             <p v-else :class="{ outOfStock: !inStock }">Out of Stock</p>
 
             <info-tab :details="details" :shipping="shipping"></info-tab>
-
-                    <div  class="color-box"
-                  v-for="(variant, index) in variants"
-                  :key="variant.variantId"
-                  :style="{ backgroundColor:variant.variantColor }"
-                  @mouseover="updateProduct(index)"
-            >
-            </div>
-    
+      
+                   <div  class="color-box"
+     v-for="(variant, index) in variants"
+     :key="variant.variantId"
+     :style="{ backgroundColor:variant.variantColor }"
+     @click="updateProduct(index)"
+     :class="{ selectedColor: selectedVariant === index }">
+</div>
+            <p>Size:</p>
+<div class="size-selector">
+  <button 
+  v-for="(size, index) in sizes" 
+  :key="index"
+  :class="{ selectedSize: selectedSize === size }"
+  @click="selectSize(size)" 
+  :disabled="!inStock">
+  {{ size }}
+</button>
+</div>
+            
             <button v-on:click="addToCart" :disabled="!inStock" :class="{ disabledButton: !inStock }">Add to Cart</button>
 
             <button @click="removeFromCart">Remove from cart</button>
@@ -53,8 +64,9 @@ Vue.component('product',{
                     variantQuantity: 0
                 }
             ],
-            onSale: true,
             reviews: [],
+            sizes: ['S', 'M', 'L', 'X','XL','XXL'],
+            selectedSize: null,
         }
     },
 
@@ -71,13 +83,19 @@ Vue.component('product',{
         },
         updateProduct(index) {
             this.selectedVariant = index;
+            if (!this.inStock) {
+                this.selectedSize = null;
+            }
         },
         removeFromCart: function() {
             this.$emit('remove-from-cart', this.variants[this.selectedVariant].variantId)
         },
         addReview(productReview){
             this.reviews.push(productReview)
-        }
+        },
+        selectSize(size) {
+            this.selectedSize = size;
+        },
     },
 
     computed:{
@@ -90,12 +108,6 @@ Vue.component('product',{
         inStock(){
             return this.variants[this.selectedVariant].variantQuantity
         },
-        sale(){
-            if(this.onSale){
-                return this.brand + ' ' + this.product + 'are on sale!'
-            }
-            return this.brand + ' ' + this.product + 'are not one sale!'
-        },
         shipping(){
             if (this.premium) {
                 return "Free"
@@ -105,23 +117,19 @@ Vue.component('product',{
         },
     },
     mounted(){
+        const savedReviews = localStorage.getItem('reviews');
+        if (savedReviews) {
+            this.reviews = JSON.parse(savedReviews);
+        }
+
         eventBus.$on('review-submitted', productReview => {
-            this.reviews.push(productReview)
-        })
+            this.reviews.push(productReview);
+            localStorage.setItem('reviews', JSON.stringify(this.reviews));
+        });
     }
 })
 
-// Vue.component('product-details',{
-//     template: ` <ul>
-//                 <li v-for="detail in details">{{ detail }}</li>
-//             </ul>`,
-//     props: {
-//         details:{
-//             type: Array,
-//             required:true
-//         }
-//     }
-// })
+
 Vue.component('product-review', {
     template: `<form class="review-form" @submit.prevent="onSubmit">
     <p class="error" v-if="errors.length">
@@ -176,27 +184,40 @@ Vue.component('product-review', {
             errors: [],
         }
     },
+    mounted() {
+        const savedReviews = localStorage.getItem('reviews');
+        if (savedReviews) {
+            this.reviews = JSON.parse(savedReviews);
+        }
+    },
     methods: {
-        onSubmit(){ 
-            this.errors = []
-            if (this.name && this.review && this.rating && this.recommend){
-            let productReview = {
-                name: this.name,
-                review: this.review,
-                rating: this.rating,
-                recommend: this.recommend,
-            }
-            eventBus.$emit('review-submitted', productReview)
-            this.name = null,
-            this.review = null,
-            this.rating = null,
-            this.recommend = null;
+        onSubmit() {
+            this.errors = [];
+            if (this.name && this.review && this.rating && this.recommend) {
+                let productReview = {
+                    name: this.name,
+                    review: this.review,
+                    rating: this.rating,
+                    recommend: this.recommend,
+                };
+                eventBus.$emit('review-submitted', productReview);
+                this.clearForm();
             } else {
-                if(!this.name) this.errors.push("Name required.")
-                if(!this.review) this.errors.push("Review required.")
-                if(!this.rating) this.errors.push("Rating required.")
-                if(!this.recommend) this.errors.push("Recommendation required")
+                this.showErrors();
             }
+        },
+
+        clearForm() {
+            this.name = null;
+            this.review = null;
+            this.rating = null;
+            this.recommend = null;
+        },
+        showErrors() {
+            if (!this.name) this.errors.push("Name required.");
+            if (!this.review) this.errors.push("Review required.");
+            if (!this.rating) this.errors.push("Rating required.");
+            if (!this.recommend) this.errors.push("Recommendation required");
         },
     }
 })
@@ -205,7 +226,8 @@ Vue.component ('product-tabs', {
     props: {
         reviews:{
             type: Array,
-            required: false
+            required: false,
+            default: () =>  []
         }
     },
     template: `
